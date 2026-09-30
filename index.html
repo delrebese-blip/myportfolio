@@ -2401,25 +2401,25 @@
     }
 
     async function postInquiry(payload){
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+      if (navigator.onLine === false) throw new Error('offline');
+      const json = JSON.stringify(payload);
+      // Apps Script can take several seconds to answer (and its reply can't be
+      // read cross-origin anyway), so hand the request off to the browser and
+      // don't wait for a response. The browser delivers it in the background.
       try{
-        // Apps Script answers POSTs with a redirect that browsers block from
-        // being read cross-origin, even though the data is saved. "no-cors"
-        // sends the request normally and resolves as soon as it goes through;
-        // it only rejects on a real network failure.
-        await fetch(INQUIRY_ENDPOINT, {
-          method: 'POST',
-          mode: 'no-cors',
-          keepalive: true,
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload),
-          signal: ctrl.signal
-        });
-        return true;
-      } finally {
-        clearTimeout(timer);
-      }
+        if (navigator.sendBeacon){
+          const blob = new Blob([json], { type: 'text/plain;charset=utf-8' });
+          if (navigator.sendBeacon(INQUIRY_ENDPOINT, blob)) return true;
+        }
+      } catch(_) { /* fall through to fetch */ }
+      fetch(INQUIRY_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors',
+        keepalive: true,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: json
+      }).catch(() => {});
+      return true;
     }
 
     function showInquiryCapture(concernText){
